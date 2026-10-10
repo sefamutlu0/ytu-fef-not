@@ -443,14 +443,14 @@ export default function Home() {
         selectedFile.type.startsWith("image/") ||
         /\.(jpg|jpeg|png|webp)$/i.test(selectedFile.name);
 
-      // Dosya adının çakışmaması için Date.now() ekleme
-      const cleanFileName = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const storageFilePath = `${Date.now()}_${cleanFileName}`;
+      // Dosya adındaki parantez ve boşlukları temizleyen güvenli regex
+      const cleanName = selectedFile.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '');
+      const filePath = `${Date.now()}_${cleanName}`;
 
       // 1. Supabase Storage 'course-notes' bucket'ına yükle
       const { error: uploadError } = await supabase.storage
         .from("course-notes")
-        .upload(storageFilePath, selectedFile, {
+        .upload(filePath, selectedFile, {
           cacheControl: "3600",
           upsert: false,
         });
@@ -465,7 +465,7 @@ export default function Home() {
       // 2. Bucket'tan dosyanın public URL'ini al
       const { data: urlData } = supabase.storage
         .from("course-notes")
-        .getPublicUrl(storageFilePath);
+        .getPublicUrl(filePath);
 
       const publicFileUrl = urlData.publicUrl;
 
