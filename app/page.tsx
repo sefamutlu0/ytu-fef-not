@@ -172,7 +172,9 @@ export default function Home() {
   const [contactSending, setContactSending] = useState(false);
 
   // Admin Giriş Formu State
+  const [adminUsername, setAdminUsername] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
+  const [adminLoginLoading, setAdminLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState("");
 
   // Toast Bildirim State
@@ -555,27 +557,55 @@ export default function Home() {
   };
 
   // ============================================================
-  // ADMİN PANELİ & MODERASYON
+  // ADMİN PANELİ & MODERASYON (DB & RPC TABANLI DOĞRULAMA)
   // ============================================================
-  const handleAdminLogin = (e: React.FormEvent) => {
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminPassword === "admin123") {
-      setIsAdminLoggedIn(true);
-      setIsAdminLoginOpen(false);
-      setAdminPassword("");
-      setLoginError("");
-      setPreviousView(currentView);
-      fetchAdminNotes();
-      fetchAdminMessages();
-      setCurrentView("admin_panel");
-      showToast("Yönetici girişi başarılı. Moderatör paneline hoş geldiniz!", "success");
-    } else {
-      setLoginError("Şifre hatalı! (Test şifresi: admin123)");
+    if (!adminUsername.trim() || !adminPassword.trim()) {
+      showToast("Lütfen kullanıcı adı ve şifre giriniz", "warning");
+      return;
+    }
+
+    setAdminLoginLoading(true);
+    setLoginError("");
+
+    try {
+      const { data: isValid, error } = await supabase.rpc("verify_admin_login", {
+        p_username: adminUsername.trim(),
+        p_password: adminPassword,
+      });
+
+      if (error) throw error;
+
+      if (isValid) {
+        setIsAdminLoggedIn(true);
+        setIsAdminLoginOpen(false);
+        setAdminUsername("");
+        setAdminPassword("");
+        setLoginError("");
+        setPreviousView(currentView);
+        fetchAdminNotes();
+        fetchAdminMessages();
+        setCurrentView("admin_panel");
+        showToast("Yönetici girişi başarılı", "success");
+      } else {
+        setLoginError("Kullanıcı adı veya şifre hatalı!");
+        showToast("Kullanıcı adı veya şifre hatalı!", "warning");
+      }
+    } catch (err: unknown) {
+      console.error(err);
+      const msg = err instanceof Error ? err.message : "Giriş yapılırken bir hata oluştu";
+      setLoginError(msg);
+      showToast(msg, "warning");
+    } finally {
+      setAdminLoginLoading(false);
     }
   };
 
   const handleAdminLogout = () => {
     setIsAdminLoggedIn(false);
+    setAdminUsername("");
+    setAdminPassword("");
     setCurrentView(previousView === "admin_panel" ? "departments" : previousView);
     showToast("Yönetici oturumu kapatıldı.", "info");
   };
@@ -1750,14 +1780,34 @@ export default function Home() {
             <form onSubmit={handleAdminLogin} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Yönetici Şifresi
+                  Kullanıcı Adı
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="Kullanıcı adınızı giriniz"
+                    value={adminUsername}
+                    onChange={(e) => {
+                      setAdminUsername(e.target.value);
+                      setLoginError("");
+                    }}
+                    className="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Şifre
                 </label>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     type="password"
                     required
-                    placeholder="Şifreyi giriniz (admin123)"
+                    placeholder="••••••••••••"
                     value={adminPassword}
                     onChange={(e) => {
                       setAdminPassword(e.target.value);
@@ -1774,13 +1824,6 @@ export default function Home() {
                 )}
               </div>
 
-              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/60 text-[11px] text-amber-800 flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
-                <span>
-                  Test girişi için şifre: <strong>admin123</strong>
-                </span>
-              </div>
-
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -1791,10 +1834,20 @@ export default function Home() {
                 </button>
                 <button
                   type="submit"
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition shadow-sm cursor-pointer"
+                  disabled={adminLoginLoading}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-60 rounded-xl transition shadow-sm cursor-pointer"
                 >
-                  <Lock className="w-3.5 h-3.5" />
-                  <span>Giriş Yap</span>
+                  {adminLoginLoading ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Kontrol Ediliyor...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Giriş Yap</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
